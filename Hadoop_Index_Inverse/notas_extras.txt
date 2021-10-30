@@ -1,0 +1,75 @@
+**********
+1)# levantar docker-compose:
+docker-compose up -d
+
+
+************* indice invertido map-reduce job
+2) # copiar codigo java e input files (para probar el codigo) al contenedor (cualquiera)
+docker cp map-reduce-inverted-index/InvertedIndex.java namenode:/tmp/
+docker cp map-reduce-inverted-index/input/ namenode:/tmp/
+
+
+3)# entrar a la terminal del namenode
+docker exec -it namenode /bin/bash
+
+4)cd tmp
+
+5)
+# en el contenedor, setear variables de ambiente manualmente para construir el jar de InvertedIndex.java
+export PATH=${JAVA_HOME}/bin:${PATH}
+export HADOOP_CLASSPATH=${JAVA_HOME}/lib/tools.jar
+
+6)
+# construccion del jar, se construira un archivo invertedindex.jar (en /tmp)
+hadoop com.sun.tools.javac.Main InvertedIndex.java
+jar cf invertedindex.jar InvertedIndex*.class
+
+# llevar directorio input/ a hdfs, ya que en hadoop se correra el map-reduce job
+hdfs dfs -mkdir -p /user/root/inverted_index/
+hdfs dfs -put -f input/ /user/root/inverted_index/
+
+# ejecutar .jar (map-reduce job) en hadoop
+hadoop jar invertedindex.jar InvertedIndex /user/root/inverted_index/input /user/root/inverted_index/output
+
+# ver resultado de map-reduce job
+hdfs dfs -cat /user/root/inverted_index/output/part-r-00000
+
+# extraer a local(contenedor /tmp) el resultado de la ejecucion del map-reduce job
+hdfs dfs -get /user/root/inverted_index/output/part-r-00000 inverted_index_map_reduce.out
+
+# eliminar directorio de hdfs
+hdfs dfs -rmr /user/root/inverted_index/output
+
+
+
+2) # copiar archivos de trabajo al contenedor (cualquiera)
+docker cp sample-text.txt namenode:/tmp/
+docker cp hadoop-mapreduce-examples-2.7.1-sources.jar namenode:/tmp/
+
+
+
+# estando en el contenedor (/tmp), llevar los archivos a utilizar a hdfs
+hdfs dfs -mkdir -p /user/root/input
+hdfs dfs -put sample-text.txt /user/root/input
+
+# ejecutar codigo map-reduce
+hadoop jar hadoop-mapreduce-examples-2.7.1-sources.jar org.apache.hadoop.examples.WordCount input output
+
+# ver resultado de map-reduce job
+hdfs dfs -cat /user/root/output/part-r-00000
+
+# extraer a local(contenedor /tmp) el resultado de la ejecucion del map-reduce job
+hdfs dfs -get /user/root/output/part-r-00000 word_count_map_reduce.out
+
+
+
+
+
+# eliminar volumnes de docker
+docker volume rm docker-hadoop_hadoop_historyserver docker-hadoop_hadoop_namenode docker-hadoop_hadoop_datanode docker-hadoop_hadoop_datanode2
+
+# eliminar docker-compose:
+docker-compose down
+
+
+
